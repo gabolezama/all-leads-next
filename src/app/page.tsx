@@ -1,95 +1,75 @@
-import Image from "next/image";
-import styles from "./page.module.css";
+'use client'
+import { ChangeEvent, useState } from "react";
+import Papa from 'papaparse';
+import {filterFields} from './utils/constants';
+import {getLeadsByFilters } from "./api/services/getLeads";
+import { addToDownloadCounter } from "./api/services/addToCounter";
 
 export default function Home() {
+  const [data, setData] = useState([]);
+  const [filterObj, setFilterObj] = useState({});
+  const [blob, setBlob] = useState<string | null>(null);
+
+  const handleFileUpload = (event: ChangeEvent<HTMLInputElement>) => {
+    if(event.target.files === null){
+      alert("Invalid uploaded file");
+      return 
+    }
+    const file = event.target.files[0];
+    if (file) {
+      Papa.parse(file, {
+        header: true,
+        complete: (results: any) => {
+          setData(results.data);
+        },
+      });
+    }
+  };
+
+  const handleFilterInput = (evt: ChangeEvent<HTMLInputElement>) => {
+    setBlob(null);
+    setFilterObj({
+      ...filterObj,
+      [evt.target.id]: evt.target.value,
+    })
+  };
+
+  const searchFilteredLeads = async () => {
+    const filters = Object.entries(filterObj)
+    .map(([key, value]) => ({
+      filterName: key,
+      filterValue: value as string,
+    }))
+    return await getLeadsByFilters(filters)
+  }
+  const generateNewCsv = async() => {
+    const data = await searchFilteredLeads();
+    await addToDownloadCounter(data);
+    const csv = Papa.unparse(data);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    setBlob(URL.createObjectURL(blob));
+  }
   return (
-    <main className={styles.main}>
-      <div className={styles.description}>
-        <p>
-          Get started by editing&nbsp;
-          <code className={styles.code}>src/app/page.tsx</code>
-        </p>
-        <div>
-          <a
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{" "}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className={styles.vercelLogo}
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
-        </div>
+    <div>
+      <h1 style={{textAlign: 'center'}}>Upload and Filter CSV</h1>
+      <div className="header-container">
+        <input type="file" accept=".csv" onChange={handleFileUpload} />
+        <button onClick={generateNewCsv}>Generar CSV Filtrado</button>
+        {blob && 
+        <a href={`${blob}`} download={`filtered-leads-${Date()}`}>
+          Descargar el nuevo archivo
+        </a>}
       </div>
-
-      <div className={styles.center}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
+      <div className="filters-container">
+        {
+          filterFields.map((field: string, i: number) =>
+            <div key={`${field}_${i}`}>
+              <p>{field}</p>
+              <input type="text" name="" id={field} onChange={handleFilterInput} />
+            </div>
+          )
+        }
       </div>
-
-      <div className={styles.grid}>
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className={styles.card}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2>
-            Docs <span>-&gt;</span>
-          </h2>
-          <p>Find in-depth information about Next.js features and API.</p>
-        </a>
-
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className={styles.card}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2>
-            Learn <span>-&gt;</span>
-          </h2>
-          <p>Learn about Next.js in an interactive course with&nbsp;quizzes!</p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className={styles.card}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2>
-            Templates <span>-&gt;</span>
-          </h2>
-          <p>Explore starter templates for Next.js.</p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className={styles.card}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2>
-            Deploy <span>-&gt;</span>
-          </h2>
-          <p>
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
-    </main>
+    </div>
   );
 }
